@@ -1,0 +1,103 @@
+- name : Server Hardening
+  hosts : Prod
+  become : True 
+ 
+
+  tasks:
+
+      - name : Verify OS version
+        ansible.builtin.command : cat /etc/os-release
+
+      - name : To Fail over the on-prem server we need cloud-init service enable for azure to boot the server up and identiy hostname and associated network interface
+        ansible.builtin.command : sudo apt install -y cloud-init
+      
+     
+      - name : Verify SSH service
+        ansible.builtin.command : sudo systemctl status sshd
+
+      - name : enable the ssh service
+        ansible.builtin.command : sudo systemctl enable ssh
+      - name : Verify Nginx service
+        ansible.builtin.command : sudo systemctl status nginx
+      - name : Enable the Nginx service
+        ansible.builtin.command : sudo systemctl enable nginx
+
+      - name : creating tutorial file in default web page location in the server  
+        ansible.builtin.file:
+          path : /var/www/tutorial
+          state : directory
+          owner : root
+          group : root
+          mode: '0755'
+
+      - name: Create web page in default Nginx directory
+        ansible.builtin.copy:
+           src : /Users/pramodsasi/ansible-project/Project3/index.html
+           dest : /var/www/tutorial/index.html
+           owner : root
+           group : root
+           mode: '0644'  
+      
+      - name: Configure a virtual host and local host since public domain is not available for testing purpose
+        ansible.builtin.copy :
+          dest : /etc/nginx/sites-enabled/tutorial
+          owner : root
+          group : root
+          mode : '0644'
+          content : |
+            server {
+                listen 81;
+                listen [::]:81;
+                server_name example.ubuntu.com;
+                root /var/www/tutorial;
+                index index.html;
+                location / {
+                    try_files $uri $uri/ =404;
+                }
+            }
+            
+
+      - name: restart the nginx service to apply the changes
+        ansible.builtin.command : sudo systemctl restart nginx 
+      
+      - name : verify ufw service
+        ansible.builtin.command : sudo systemctl status ufw
+
+
+      - name : Allow SSH through the firewall
+        community.general.ufw :
+           rule : allow
+           name : OpenSSH
+           port : 22
+
+      - name : Allow HTTP through the firewall
+        community.general.ufw :
+           rule : allow
+           port : 80
+
+      - name : Allow port 81 through the firewall
+        community.general.ufw :
+           rule : allow
+           port : 81   
+
+      - name : Enable the firewall
+        community.general.ufw :
+          state : enabled  
+           
+      - name : Copy the ceriticate to destnation server     
+        ansible.builtin.copy :
+          src : /Users/pramodsasi/ansible-project/Project3/test.crt
+          dest : /usr/local/share/ca-certificates/  
+          owner : root
+          group : root
+          mode : '0644'
+          backup : yes
+
+      - name : Update the certificate to the  server
+        ansible.builtin.command :  sudo update-ca-certificates
+     
+    
+      - name : Reboot the server giving 1 hour time to complete the reboot
+        ansible.builtin.reboot :
+          reboot_timeout: 3600
+    
